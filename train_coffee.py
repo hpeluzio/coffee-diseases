@@ -179,17 +179,17 @@ elif args.net=='res34':
         nn.Softmax(dim=1)
     )
 elif args.net=='res50':
-    net = ResNet50()
+    # net = ResNet50()
 
-    # net = torchvision.models.resnet50(weights='DEFAULT')
-    # num_features = net.fc.in_features
+    net = torchvision.models.resnet50(weights='DEFAULT')
+    num_features = net.fc.in_features
 
-    # net.fc = nn.Sequential(
-    #     nn.Linear(num_features, 256),
-    #     nn.ReLU(),
-    #     nn.Linear(256, num_classes),
-    #     nn.Softmax(dim=1)
-    # )
+    net.fc = nn.Sequential(
+        nn.Linear(num_features, 256),
+        nn.ReLU(),
+        nn.Linear(256, num_classes),
+        nn.Softmax(dim=1)
+    )
 
     # net.fc = nn.Sequential(
     #     nn.Linear(num_features, num_classes),
