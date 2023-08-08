@@ -180,14 +180,22 @@ elif args.net=='res34':
     )
 elif args.net=='res50':
     net = ResNet50()
+
     # net = torchvision.models.resnet50(weights='DEFAULT')
     # num_features = net.fc.in_features
+
     # net.fc = nn.Sequential(
     #     nn.Linear(num_features, 256),
     #     nn.ReLU(),
     #     nn.Linear(256, num_classes),
     #     nn.Softmax(dim=1)
     # )
+
+    # net.fc = nn.Sequential(
+    #     nn.Linear(num_features, num_classes),
+    #     nn.Softmax(dim=1)
+    # )
+    # net.fc = nn.Linear(num_features, num_classes)
 
 elif args.net=='res101':
     net = ResNet101()
@@ -377,7 +385,7 @@ def test(epoch):
             "model": net.state_dict(), 
             "optimizer": optimizer.state_dict(),
             "scaler": scaler.state_dict(),
-            "acc": best_acc,
+            "acc": acc,
             "epoch": epoch,
         }
         if not os.path.isdir('checkpoint'):
