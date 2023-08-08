@@ -22,6 +22,7 @@ from torch.utils.data import DataLoader, Dataset
 from PIL import Image
 
 import os
+import sys 
 import argparse
 import pandas as pd
 import csv
@@ -45,6 +46,7 @@ parser.add_argument('--mixup', action='store_true', help='add mixup augumentatio
 parser.add_argument('--net', default='vit')
 parser.add_argument('--bs', default='512')
 parser.add_argument('--batch_size', type=int, default=64)
+parser.add_argument('--num_classes', type=int, default=4)
 parser.add_argument('--size', default="60")
 parser.add_argument('--n_epochs', type=int, default=50)
 parser.add_argument('--use_early_stopping', action='store_true', help='Use early stopping')
@@ -74,7 +76,9 @@ n_epochs = args.n_epochs
 batch_size = args.batch_size
 use_early_stopping = args.use_early_stopping
 early_stopping_patience = args.patience
+num_classes = args.num_classes
 print('n_epochs: ', n_epochs)
+print('num_classes: ', num_classes)
 print('batch_size: ', batch_size)
 print('use_early_stopping: ', use_early_stopping)
 print('early_stopping_patience: ', early_stopping_patience)
@@ -91,7 +95,7 @@ else:
     size = imsize
 
 transform_train = transforms.Compose([
-    # transforms.RandomCrop(32, padding=4),
+    transforms.RandomCrop(32, padding=4),
     transforms.Resize(size=[size, size]),
     # transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
@@ -146,6 +150,12 @@ test_folder = os.path.join(dataset_folder, 'swatdcnn/data/Augmented/stage_3/vali
 train_dataset = CustomDataset(root=train_folder, transform=transform_train)
 test_dataset = CustomDataset(root=test_folder, transform=transform_test)
 
+train_dataset_size = len(train_dataset)
+test_dataset_size = len(test_dataset)
+
+print(f"Number of images in train dataset: {train_dataset_size}")
+print(f"Number of images in test/validation dataset: {test_dataset_size}")
+
 # Create data loaders
 trainloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 testloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
@@ -160,9 +170,25 @@ if args.net=='res18':
 elif args.net=='vgg':
     net = VGG('VGG19')
 elif args.net=='res34':
-    net = ResNet34()
+    net = torchvision.models.resnet34(weights='DEFAULT')
+    num_features = net.fc.in_features
+    net.fc = nn.Sequential(
+        nn.Linear(num_features, num_classes),
+        nn.ReLU(),
+        nn.Linear(256, num_classes),
+        nn.Softmax(dim=1)
+    )
 elif args.net=='res50':
     net = ResNet50()
+    # net = torchvision.models.resnet50(weights='DEFAULT')
+    # num_features = net.fc.in_features
+    # net.fc = nn.Sequential(
+    #     nn.Linear(num_features, 256),
+    #     nn.ReLU(),
+    #     nn.Linear(256, num_classes),
+    #     nn.Softmax(dim=1)
+    # )
+
 elif args.net=='res101':
     net = ResNet101()
 elif args.net=="convmixer":
@@ -171,62 +197,62 @@ elif args.net=="convmixer":
 elif args.net=="mlpmixer":
     from models.mlpmixer import MLPMixer
     net = MLPMixer(
-    image_size = 32,
-    channels = 3,
-    patch_size = args.patch,
-    dim = 512,
-    depth = 6,
-    num_classes = 5
-)
+        image_size = 32,
+        channels = 3,
+        patch_size = args.patch,
+        dim = 512,
+        depth = 6,
+        num_classes = num_classes
+    )
 elif args.net=="vit_small":
     from models.vit_small import ViT
     net = ViT(
-    image_size = size,
-    patch_size = args.patch,
-    num_classes = 5,
-    dim = int(args.dimhead),
-    depth = 6,
-    heads = 8,
-    mlp_dim = 512,
-    dropout = 0.1,
-    emb_dropout = 0.1
-)
+        image_size = size,
+        patch_size = args.patch,
+        num_classes = num_classes,
+        dim = int(args.dimhead),
+        depth = 6,
+        heads = 8,
+        mlp_dim = 512,
+        dropout = 0.1,
+        emb_dropout = 0.1
+    )
 elif args.net=="vit_tiny":
     from models.vit_small import ViT
     net = ViT(
-    image_size = size,
-    patch_size = args.patch,
-    num_classes = 5,
-    dim = int(args.dimhead),
-    depth = 4,
-    heads = 6,
-    mlp_dim = 256,
-    dropout = 0.1,
-    emb_dropout = 0.1
-)
+        image_size = size,
+        patch_size = args.patch,
+        num_classes = num_classes,
+        dim = int(args.dimhead),
+        depth = 4,
+        heads = 6,
+        mlp_dim = 256,
+        dropout = 0.1,
+        emb_dropout = 0.1
+    )
 elif args.net=="simplevit":
     from models.simplevit import SimpleViT
     net = SimpleViT(
-    image_size = size,
-    patch_size = args.patch,
-    num_classes = 5,
-    dim = int(args.dimhead),
-    depth = 6,
-    heads = 8,
-    mlp_dim = 512
-)
+        image_size = size,
+        patch_size = args.patch,
+        num_classes = num_classes,
+        dim = int(args.dimhead),
+        depth = 6,
+        heads = 8,
+        mlp_dim = 512
+    )
 elif args.net=="vit":
     net = ViT(
-    image_size = size,
-    patch_size = args.patch,
-    num_classes = 5,
-    dim = int(args.dimhead),
-    depth = 6,
-    heads = 8,
-    mlp_dim = 512,
-    dropout = 0.1,
-    emb_dropout = 0.1
-)
+        image_size = size,
+        patch_size = args.patch,
+        num_classes = num_classes,
+        dim = int(args.dimhead),
+        depth = 6,
+        heads = 8,
+        mlp_dim = 512,
+        dropout = 0.1,
+        emb_dropout = 0.1
+    )
 elif args.net=="vit_timm":
     import timm
     net = timm.create_model("vit_base_patch16_384", pretrained=True)
@@ -234,33 +260,33 @@ elif args.net=="vit_timm":
 elif args.net=="cait":
     from models.cait import CaiT
     net = CaiT(
-    image_size = size,
-    patch_size = args.patch,
-    num_classes = 5,
-    dim = int(args.dimhead),
-    depth = 6,   # depth of transformer for patch to patch attention only
-    cls_depth=2, # depth of cross attention of CLS tokens to patch
-    heads = 8,
-    mlp_dim = 512,
-    dropout = 0.1,
-    emb_dropout = 0.1,
-    layer_dropout = 0.05
-)
+        image_size = size,
+        patch_size = args.patch,
+        num_classes = num_classes,
+        dim = int(args.dimhead),
+        depth = 6,   # depth of transformer for patch to patch attention only
+        cls_depth=2, # depth of cross attention of CLS tokens to patch
+        heads = 8,
+        mlp_dim = 512,
+        dropout = 0.1,
+        emb_dropout = 0.1,
+        layer_dropout = 0.05
+    )
 elif args.net=="cait_small":
     from models.cait import CaiT
     net = CaiT(
-    image_size = size,
-    patch_size = args.patch,
-    num_classes = 5,
-    dim = int(args.dimhead),
-    depth = 6,   # depth of transformer for patch to patch attention only
-    cls_depth=2, # depth of cross attention of CLS tokens to patch
-    heads = 6,
-    mlp_dim = 256,
-    dropout = 0.1,
-    emb_dropout = 0.1,
-    layer_dropout = 0.05
-)
+        image_size = size,
+        patch_size = args.patch,
+        num_classes = num_classes,
+        dim = int(args.dimhead),
+        depth = 6,   # depth of transformer for patch to patch attention only
+        cls_depth=2, # depth of cross attention of CLS tokens to patch
+        heads = 6,
+        mlp_dim = 256,
+        dropout = 0.1,
+        emb_dropout = 0.1,
+        layer_dropout = 0.05
+    )
 elif args.net=="swin":
     from models.swin import swin_t
     net = swin_t(window_size=args.patch,
@@ -347,13 +373,16 @@ def test(epoch):
     acc = 100.*correct/total
     if acc > best_acc:
         print('Saving..')
-        state = {"model": net.state_dict(),
-              "optimizer": optimizer.state_dict(),
-              "scaler": scaler.state_dict()}
+        state = {
+            "model": net.state_dict(), 
+            "optimizer": optimizer.state_dict(),
+            "scaler": scaler.state_dict(),
+            "acc": best_acc,
+            "epoch": epoch,
+        }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/'+args.net+'-{}-ckpt.t7'.format(args.patch))
-        best_acc = acc
+        torch.save(state, './checkpoint/coffee-diseases-'+args.net+'-{}-ckpt.t7'.format(args.patch))
     
     os.makedirs("log", exist_ok=True)
     content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}'
@@ -394,8 +423,6 @@ for epoch in range(start_epoch, args.n_epochs):
     # print(list_loss)
 
     # Early stopping check
-    print('epochs_since_improvement: ', epochs_since_improvement)
-    print('best_acc: ', best_acc)
     if use_early_stopping:
         if acc > best_acc:
             best_acc = acc
