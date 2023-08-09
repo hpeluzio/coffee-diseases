@@ -50,7 +50,7 @@ parser.add_argument('--num_classes', type=int, default=4)
 parser.add_argument('--size', default="60")
 parser.add_argument('--n_epochs', type=int, default=50)
 parser.add_argument('--use_early_stopping', action='store_true', help='Use early stopping')
-parser.add_argument('--patience', type=int, default=5)
+parser.add_argument('--patience', type=int, default=6)
 parser.add_argument('--patch', default='4', type=int, help="patch for ViT")
 parser.add_argument('--dimhead', default="512", type=int)
 parser.add_argument('--convkernel', default='8', type=int, help="parameter for convmixer")
@@ -61,8 +61,8 @@ args = parser.parse_args()
 usewandb = ~args.nowandb
 if usewandb:
     import wandb
-    watermark = "coffee_diseases_{}_lr{}".format(args.net, args.lr)
-    wandb.init(project="coffee-diseases",
+    watermark = "coffee_diseases_stage3_{}_lr{}".format(args.net, args.lr)
+    wandb.init(project="coffee-diseases-stage3",
             name=watermark)
     wandb.config.update(args)
 
@@ -179,26 +179,40 @@ elif args.net=='res34':
         nn.Softmax(dim=1)
     )
 elif args.net=='res50':
-    # net = ResNet50()
-
+    net = ResNet50(num_classes=num_classes)
+elif args.net=='res50-torchvision':
     # net = torchvision.models.resnet50(weights='DEFAULT')
     net = torchvision.models.resnet50(weights=None)
     num_features = net.fc.in_features
     net.fc = nn.Linear(num_features, num_classes)
 
     # net.fc = nn.Sequential(
-    #     nn.Linear(num_features, 256),
-    #     nn.ReLU(),
-    #     nn.Linear(256, num_classes),
+    #     nn.Linear(num_features, num_classes),
     #     nn.Softmax(dim=1)
     # )
+elif args.net=='res50-torchvision-pretrained':
+    net = torchvision.models.resnet50(weights='DEFAULT')
+    num_features = net.fc.in_features
+    net.fc = nn.Linear(num_features, num_classes)
 
     # net.fc = nn.Sequential(
     #     nn.Linear(num_features, num_classes),
     #     nn.Softmax(dim=1)
     # )
-
-
+elif args.net=='efficientnetb4':
+    net = torchvision.models.efficientnet_b4(weights=None)
+    net.classifier = nn.Sequential(
+        nn.Dropout(p=0.4, inplace=True), 
+        nn.Linear(in_features=1792, out_features=num_classes, bias=True),
+        nn.Softmax(dim=1) 
+    )
+elif args.net=='efficientnetb4-pretrained':
+    net = torchvision.models.efficientnet_b4(weights='DEFAULT')
+    net.classifier = nn.Sequential(
+        nn.Dropout(p=0.4, inplace=True), 
+        nn.Linear(in_features=1792, out_features=num_classes, bias=True),
+        nn.Softmax(dim=1) 
+    )
 elif args.net=='res101':
     net = ResNet101()
 elif args.net=="convmixer":
@@ -392,7 +406,7 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/coffee-diseases-'+args.net+'-{}-ckpt.t7'.format(args.patch))
+        torch.save(state, './checkpoint/coffee-diseases-stage3-'+args.net+'-{}-ckpt.t7'.format(args.patch))
     
     os.makedirs("log", exist_ok=True)
     content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}'
