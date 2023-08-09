@@ -46,7 +46,7 @@ parser.add_argument('--mixup', action='store_true', help='add mixup augumentatio
 parser.add_argument('--net', default='vit')
 parser.add_argument('--bs', default='512')
 parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--num_classes', type=int, default=4)
+parser.add_argument('--num_classes', type=int, default=3)
 parser.add_argument('--size', default="60")
 parser.add_argument('--n_epochs', type=int, default=50)
 parser.add_argument('--use_early_stopping', action='store_true', help='Use early stopping')
@@ -62,7 +62,7 @@ usewandb = ~args.nowandb
 if usewandb:
     import wandb
     watermark = "coffee_diseases_{}_lr{}".format(args.net, args.lr)
-    wandb.init(project="coffee-diseases",
+    wandb.init(project="coffee-diseases-stage2",
             name=watermark)
     wandb.config.update(args)
 
@@ -94,18 +94,24 @@ if args.net=="vit_timm":
 else:
     size = imsize
 
+
+# Calculated mean: tensor([0.6410, 0.6595, 0.5589])
+# Calculated std: tensor([0.2477, 0.2294, 0.3135])
+
 transform_train = transforms.Compose([
     transforms.RandomCrop(32, padding=4),
     transforms.Resize(size=[size, size]),
     # transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) 
+    # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]) 
+    transforms.Normalize(mean=[0.6410, 0.6595, 0.5589], std=[0.2477, 0.2294, 0.3135]) 
 ])
 
 transform_test = transforms.Compose([
     transforms.Resize(size=[size, size]),
     transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    transforms.Normalize(mean=[0.6410, 0.6595, 0.5589], std=[0.2477, 0.2294, 0.3135]) 
 ])
 
 # Add RandAugment with N, M(hyperparameter)
@@ -144,8 +150,8 @@ class CustomDataset(Dataset):
 # Create custom datasets
 dataset_folder = r'./dataset/'
 
-train_folder = os.path.join(dataset_folder, 'swatdcnn/data/Augmented/stage_3/train')
-test_folder = os.path.join(dataset_folder, 'swatdcnn/data/Augmented/stage_3/validation')
+train_folder = os.path.join(dataset_folder, 'swatdcnn/data/Augmented/stage_2/train')
+test_folder = os.path.join(dataset_folder, 'swatdcnn/data/Augmented/stage_2/validation')
 
 train_dataset = CustomDataset(root=train_folder, transform=transform_train)
 test_dataset = CustomDataset(root=test_folder, transform=transform_test)
@@ -160,7 +166,7 @@ print(f"Number of images in test/validation dataset: {test_dataset_size}")
 trainloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 testloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-classes = ('0_Cercospora', '1_Phoma', '2_Leaf_Miner', '3_Red_Spider_Mite')
+classes = ('0_Rust', '1_Brown_Spots', '2_Sooty_Molds')
 
 # Model factory..
 print('==> Building model..')
@@ -179,10 +185,12 @@ elif args.net=='res34':
         nn.Softmax(dim=1)
     )
 elif args.net=='res50':
-    # net = ResNet50()
+    net = ResNet50(num_classes=num_classes)
 
-    net = torchvision.models.resnet50(weights='DEFAULT')
-    num_features = net.fc.in_features
+    # net = torchvision.models.resnet50(weights='DEFAULT')
+    # net = torchvision.models.resnet50(weights=None)
+
+    # num_features = net.fc.in_features
 
     # net.fc = nn.Sequential(
     #     nn.Linear(num_features, 256),
@@ -195,13 +203,13 @@ elif args.net=='res50':
     #     nn.Linear(num_features, num_classes),
     #     nn.Softmax(dim=1)
     # )
-    net.fc = nn.Linear(num_features, num_classes)
+    # net.fc = nn.Linear(num_features, num_classes)
 
 elif args.net=='res101':
     net = ResNet101()
 elif args.net=="convmixer":
     # You can tune the depth and dim to scale accuracy and speed.
-    net = ConvMixer(256, 16, kernel_size=args.convkernel, patch_size=1, n_classes=4)
+    net = ConvMixer(256, 16, kernel_size=args.convkernel, patch_size=1, n_classes=3)
 elif args.net=="mlpmixer":
     from models.mlpmixer import MLPMixer
     net = MLPMixer(
@@ -390,7 +398,7 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/coffee-diseases-'+args.net+'-{}-ckpt.t7'.format(args.patch))
+        torch.save(state, './checkpoint/coffee-diseases-stage2-'+args.net+'-{}-ckpt.t7'.format(args.patch))
     
     os.makedirs("log", exist_ok=True)
     content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}'
