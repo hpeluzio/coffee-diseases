@@ -61,7 +61,7 @@ args = parser.parse_args()
 usewandb = ~args.nowandb
 if usewandb:
     import wandb
-    watermark = "coffee_diseases_{}_lr{}".format(args.net, args.lr)
+    watermark = "{}_lr{}".format(args.net, args.lr)
     wandb.init(project="coffee-diseases",
             name=watermark)
     wandb.config.update(args)

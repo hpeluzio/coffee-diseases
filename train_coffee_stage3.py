@@ -7,7 +7,6 @@ Coffee diseases
 
 from __future__ import print_function
 
-import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
@@ -45,10 +44,10 @@ parser.add_argument('--nowandb', action='store_true', help='disable wandb')
 parser.add_argument('--mixup', action='store_true', help='add mixup augumentations')
 parser.add_argument('--net', default='vit')
 parser.add_argument('--bs', default='512')
-parser.add_argument('--batch_size', type=int, default=64)
+parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--num_classes', type=int, default=4)
 parser.add_argument('--size', default="60")
-parser.add_argument('--n_epochs', type=int, default=50)
+parser.add_argument('--n_epochs', type=int, default=25)
 parser.add_argument('--use_early_stopping', action='store_true', help='Use early stopping')
 parser.add_argument('--patience', type=int, default=6)
 parser.add_argument('--patch', default='4', type=int, help="patch for ViT")
@@ -61,7 +60,7 @@ args = parser.parse_args()
 usewandb = ~args.nowandb
 if usewandb:
     import wandb
-    watermark = "coffee_diseases_stage3_{}_lr{}".format(args.net, args.lr)
+    watermark = "{}_lr{}".format(args.net, args.lr)
     wandb.init(project="coffee-diseases-stage3",
             name=watermark)
     wandb.config.update(args)
@@ -95,7 +94,7 @@ else:
     size = imsize
 
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
+    # transforms.RandomCrop(32, padding=4),
     transforms.Resize(size=[size, size]),
     # transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
@@ -199,19 +198,21 @@ elif args.net=='res50-torchvision-pretrained':
     #     nn.Linear(num_features, num_classes),
     #     nn.Softmax(dim=1)
     # )
-elif args.net=='efficientnetb4':
-    net = torchvision.models.efficientnet_b4(weights=None)
+elif args.net=='densenet121':
+    net = torchvision.models.densenet121(weights='DEFAULT')
+    net.classifier = nn.Linear(1024, num_classes)
+elif args.net=='efficientnetb0':
+    net = torchvision.models.efficientnet_b0(weights='DEFAULT')
     net.classifier = nn.Sequential(
-        nn.Dropout(p=0.4, inplace=True), 
-        nn.Linear(in_features=1792, out_features=num_classes, bias=True),
-        nn.Softmax(dim=1) 
+        nn.Dropout(p=0.2, inplace=True), 
+        nn.Linear(in_features=1280, out_features=num_classes, bias=True),
     )
-elif args.net=='efficientnetb4-pretrained':
+elif args.net=='efficientnetb4':
     net = torchvision.models.efficientnet_b4(weights='DEFAULT')
     net.classifier = nn.Sequential(
         nn.Dropout(p=0.4, inplace=True), 
         nn.Linear(in_features=1792, out_features=num_classes, bias=True),
-        nn.Softmax(dim=1) 
+        # nn.Softmax(dim=1) 
     )
 elif args.net=='res101':
     net = ResNet101()
@@ -446,8 +447,11 @@ for epoch in range(start_epoch, args.n_epochs):
         writer.writerow(list_acc) 
     # print(list_loss)
 
-    # Early stopping check
-    if use_early_stopping:
+    # Early stopping check and update best_acc
+    if use_early_stopping == False:
+        if acc > best_acc:
+            best_acc = acc
+    elif use_early_stopping == True:
         if acc > best_acc:
             best_acc = acc
             epochs_since_improvement = 0
