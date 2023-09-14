@@ -7,7 +7,6 @@ Coffee diseases
 
 from __future__ import print_function
 
-import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
@@ -36,7 +35,9 @@ from models.convmixer import ConvMixer
 
 # parsers
 parser = argparse.ArgumentParser(description='PyTorch Coffee deseases Training')
-parser.add_argument('--lr', default=1e-4, type=float, help='learning rate') # resnets.. 1e-3, Vit..1e-4
+parser.add_argument('--stage', default="stage_1", help='Coffee stage')
+parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
+parser.add_argument('--use_scheduler', action='store_true', help='Scheduler')
 parser.add_argument('--opt', default="adam")
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--noaug', action='store_true', help='disable use randomaug')
@@ -45,10 +46,9 @@ parser.add_argument('--nowandb', action='store_true', help='disable wandb')
 parser.add_argument('--mixup', action='store_true', help='add mixup augumentations')
 parser.add_argument('--net', default='vit')
 parser.add_argument('--bs', default='512')
-parser.add_argument('--batch_size', type=int, default=64)
-parser.add_argument('--num_classes', type=int, default=4)
+parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--size', default="60")
-parser.add_argument('--n_epochs', type=int, default=50)
+parser.add_argument('--n_epochs', type=int, default=25)
 parser.add_argument('--use_early_stopping', action='store_true', help='Use early stopping')
 parser.add_argument('--patience', type=int, default=6)
 parser.add_argument('--patch', default='4', type=int, help="patch for ViT")
@@ -62,7 +62,7 @@ usewandb = ~args.nowandb
 if usewandb:
     import wandb
     watermark = "{}_lr{}".format(args.net, args.lr)
-    wandb.init(project="coffee-diseases",
+    wandb.init(project=f'coffee-diseases-{args.stage}',
             name=watermark)
     wandb.config.update(args)
 
@@ -75,13 +75,15 @@ aug = args.noaug
 n_epochs = args.n_epochs
 batch_size = args.batch_size
 use_early_stopping = args.use_early_stopping
+use_scheduler = args.use_scheduler
 early_stopping_patience = args.patience
-num_classes = args.num_classes
+print('stage: ', args.stage)
 print('n_epochs: ', n_epochs)
-print('num_classes: ', num_classes)
-print('batch_size: ', batch_size)
+print('learning rate: ', args.lr)
+print('use_scheduler: ', args.use_scheduler)
 print('use_early_stopping: ', use_early_stopping)
 print('early_stopping_patience: ', early_stopping_patience)
+print('batch_size: ', batch_size)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
@@ -95,7 +97,7 @@ else:
     size = imsize
 
 transform_train = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
+    # transforms.RandomCrop(32, padding=4),
     transforms.Resize(size=[size, size]),
     # transforms.RandomHorizontalFlip(),
     transforms.ToTensor(),
@@ -144,8 +146,8 @@ class CustomDataset(Dataset):
 # Create custom datasets
 dataset_folder = r'./dataset/'
 
-train_folder = os.path.join(dataset_folder, 'swatdcnn/data/Augmented/stage_3/train')
-test_folder = os.path.join(dataset_folder, 'swatdcnn/data/Augmented/stage_3/validation')
+train_folder = os.path.join(dataset_folder, f'swatdcnn/data/Augmented/{args.stage}/train')
+test_folder = os.path.join(dataset_folder, f'swatdcnn/data/Augmented/{args.stage}/validation')
 
 train_dataset = CustomDataset(root=train_folder, transform=transform_train)
 test_dataset = CustomDataset(root=test_folder, transform=transform_test)
@@ -160,7 +162,20 @@ print(f"Number of images in test/validation dataset: {test_dataset_size}")
 trainloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 testloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-classes = ('0_Cercospora', '1_Phoma', '2_Leaf_Miner', '3_Red_Spider_Mite')
+classes ='stage_1' 
+num_classes = 2
+
+if args.stage == 'stage_1':
+    classes = ('0_Healthy', '1_Unhealthy')
+    num_classes = 2
+
+if args.stage == 'stage_2':
+    classes = ('0_Rust', '1_Brown_Spots', '2_Sooty_Molds')
+    num_classes = 3
+
+if args.stage == 'stage_3':
+    classes = ('0_Cercospora', '1_Phoma', '2_Leaf_Miner', '3_Red_Spider_Mite')
+    num_classes = 4
 
 # Model factory..
 print('==> Building model..')
@@ -179,24 +194,42 @@ elif args.net=='res34':
         nn.Softmax(dim=1)
     )
 elif args.net=='res50':
-    # net = ResNet50()
-
-    net = torchvision.models.resnet50(weights='DEFAULT')
+    net = ResNet50(num_classes=num_classes)
+elif args.net=='res50-torchvision':
+    # net = torchvision.models.resnet50(weights='DEFAULT')
+    net = torchvision.models.resnet50(weights=None)
     num_features = net.fc.in_features
-
-    # net.fc = nn.Sequential(
-    #     nn.Linear(num_features, 256),
-    #     nn.ReLU(),
-    #     nn.Linear(256, num_classes),
-    #     nn.Softmax(dim=1)
-    # )
+    net.fc = nn.Linear(num_features, num_classes)
 
     # net.fc = nn.Sequential(
     #     nn.Linear(num_features, num_classes),
     #     nn.Softmax(dim=1)
     # )
+elif args.net=='res50-torchvision-pretrained':
+    net = torchvision.models.resnet50(weights='DEFAULT')
+    num_features = net.fc.in_features
     net.fc = nn.Linear(num_features, num_classes)
 
+    # net.fc = nn.Sequential(
+    #     nn.Linear(num_features, num_classes),
+    #     nn.Softmax(dim=1)
+    # )
+elif args.net=='densenet121':
+    net = torchvision.models.densenet121(weights='DEFAULT')
+    net.classifier = nn.Linear(1024, num_classes)
+elif args.net=='efficientnetb0':
+    net = torchvision.models.efficientnet_b0(weights='DEFAULT')
+    net.classifier = nn.Sequential(
+        nn.Dropout(p=0.2, inplace=True), 
+        nn.Linear(in_features=1280, out_features=num_classes, bias=True),
+    )
+elif args.net=='efficientnetb4':
+    net = torchvision.models.efficientnet_b4(weights='DEFAULT')
+    net.classifier = nn.Sequential(
+        nn.Dropout(p=0.4, inplace=True), 
+        nn.Linear(in_features=1792, out_features=num_classes, bias=True),
+        # nn.Softmax(dim=1) 
+    )
 elif args.net=='res101':
     net = ResNet101()
 elif args.net=="convmixer":
@@ -390,7 +423,7 @@ def test(epoch):
         }
         if not os.path.isdir('checkpoint'):
             os.mkdir('checkpoint')
-        torch.save(state, './checkpoint/coffee-diseases-'+args.net+'-{}-ckpt.t7'.format(args.patch))
+        torch.save(state, f'./checkpoint/coffee-diseases-{args.stage}-'+args.net+'-{}-ckpt.t7'.format(args.patch))
     
     os.makedirs("log", exist_ok=True)
     content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}'
@@ -413,7 +446,8 @@ for epoch in range(start_epoch, args.n_epochs):
     trainloss = train(epoch)
     val_loss, acc = test(epoch)
     
-    scheduler.step() # step cosine scheduling
+    if use_scheduler:
+        scheduler.step() # step cosine scheduling
     
     list_loss.append(val_loss)
     list_acc.append(acc)
@@ -430,8 +464,11 @@ for epoch in range(start_epoch, args.n_epochs):
         writer.writerow(list_acc) 
     # print(list_loss)
 
-    # Early stopping check
-    if use_early_stopping:
+    # Early stopping check and update best_acc
+    if use_early_stopping == False:
+        if acc > best_acc:
+            best_acc = acc
+    elif use_early_stopping == True:
         if acc > best_acc:
             best_acc = acc
             epochs_since_improvement = 0
@@ -441,6 +478,8 @@ for epoch in range(start_epoch, args.n_epochs):
         if epochs_since_improvement >= early_stopping_patience:
             print(f'Early stopping at epoch {epoch} as validation accuracy has not improved for {early_stopping_patience} epochs.')
             break  # Stop training
+
+print(f'Best accuracy: {best_acc}')
 
 # writeout wandb
 if usewandb:

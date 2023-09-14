@@ -35,7 +35,8 @@ from models.convmixer import ConvMixer
 
 # parsers
 parser = argparse.ArgumentParser(description='PyTorch Coffee deseases Training')
-parser.add_argument('--lr', default=1e-4, type=float, help='learning rate') # resnets.. 1e-3, Vit..1e-4
+parser.add_argument('--lr', default=1e-4, type=float, help='learning rate')
+parser.add_argument('--use_scheduler', action='store_true', help='Scheduler')
 parser.add_argument('--opt', default="adam")
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--noaug', action='store_true', help='disable use randomaug')
@@ -74,13 +75,16 @@ aug = args.noaug
 n_epochs = args.n_epochs
 batch_size = args.batch_size
 use_early_stopping = args.use_early_stopping
+use_scheduler = args.use_scheduler
 early_stopping_patience = args.patience
 num_classes = args.num_classes
 print('n_epochs: ', n_epochs)
-print('num_classes: ', num_classes)
-print('batch_size: ', batch_size)
+print('learning rate: ', args.lr)
+print('use_scheduler: ', args.use_scheduler)
 print('use_early_stopping: ', use_early_stopping)
 print('early_stopping_patience: ', early_stopping_patience)
+print('num_classes: ', num_classes)
+print('batch_size: ', batch_size)
 
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 best_acc = 0  # best test accuracy
@@ -430,7 +434,8 @@ for epoch in range(start_epoch, args.n_epochs):
     trainloss = train(epoch)
     val_loss, acc = test(epoch)
     
-    scheduler.step() # step cosine scheduling
+    if use_scheduler:
+        scheduler.step() # step cosine scheduling
     
     list_loss.append(val_loss)
     list_acc.append(acc)
