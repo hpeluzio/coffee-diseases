@@ -419,7 +419,7 @@ def test(epoch):
         torch.save(state, './checkpoint/coffee-diseases-stage2-'+args.net+'-{}-ckpt.t7'.format(args.patch))
     
     os.makedirs("log", exist_ok=True)
-    content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}'
+    content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}, best_acc: {(best_acc):.5f}'
     print(content)
     with open(f'log/log_{args.net}_patch{args.patch}.txt', 'a') as appender:
         appender.write(content + "\n")

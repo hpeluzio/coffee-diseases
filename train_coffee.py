@@ -42,12 +42,12 @@ parser.add_argument('--opt', default="adam")
 parser.add_argument('--resume', '-r', action='store_true', help='resume from checkpoint')
 parser.add_argument('--noaug', action='store_true', help='disable use randomaug')
 parser.add_argument('--noamp', action='store_true', help='disable mixed precision training. for older pytorch versions')
-parser.add_argument('--nowandb', action='store_true', help='disable wandb')
+parser.add_argument('--nowandb', action='store_false', help='disable wandb')
 parser.add_argument('--mixup', action='store_true', help='add mixup augumentations')
 parser.add_argument('--net', default='vit')
 parser.add_argument('--bs', default='512')
 parser.add_argument('--batch_size', type=int, default=32)
-parser.add_argument('--size', default="60")
+parser.add_argument('--size', default="224")
 parser.add_argument('--n_epochs', type=int, default=25)
 parser.add_argument('--use_early_stopping', action='store_true', help='Use early stopping')
 parser.add_argument('--patience', type=int, default=6)
@@ -58,8 +58,13 @@ parser.add_argument('--convkernel', default='8', type=int, help="parameter for c
 args = parser.parse_args()
 
 # take in args
-usewandb = ~args.nowandb
+usewandb = bool(args.nowandb)
+print('usewandb: ', usewandb)
+
+# sys.exit()
+
 if usewandb:
+    print('Entered!@')
     import wandb
     watermark = "{}_lr{}".format(args.net, args.lr)
     wandb.init(project=f'coffee-diseases-{args.stage}',
@@ -77,6 +82,7 @@ batch_size = args.batch_size
 use_early_stopping = args.use_early_stopping
 use_scheduler = args.use_scheduler
 early_stopping_patience = args.patience
+
 print('stage: ', args.stage)
 print('n_epochs: ', n_epochs)
 print('learning rate: ', args.lr)
@@ -162,20 +168,16 @@ print(f"Number of images in test/validation dataset: {test_dataset_size}")
 trainloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 testloader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
-classes ='stage_1' 
-num_classes = 2
+classes = ('0_Healthy', '1_Unhealthy')
 
 if args.stage == 'stage_1':
     classes = ('0_Healthy', '1_Unhealthy')
-    num_classes = 2
 
 if args.stage == 'stage_2':
     classes = ('0_Rust', '1_Brown_Spots', '2_Sooty_Molds')
-    num_classes = 3
 
 if args.stage == 'stage_3':
     classes = ('0_Cercospora', '1_Phoma', '2_Leaf_Miner', '3_Red_Spider_Mite')
-    num_classes = 4
 
 # Model factory..
 print('==> Building model..')
@@ -188,48 +190,73 @@ elif args.net=='res34':
     net = torchvision.models.resnet34(weights='DEFAULT')
     num_features = net.fc.in_features
     net.fc = nn.Sequential(
-        nn.Linear(num_features, num_classes),
+        nn.Linear(num_features, len(classes)),
         nn.ReLU(),
-        nn.Linear(256, num_classes),
+        nn.Linear(256, len(classes)),
         nn.Softmax(dim=1)
     )
 elif args.net=='res50':
-    net = ResNet50(num_classes=num_classes)
+    net = ResNet50(num_classes=len(classes))
 elif args.net=='res50-torchvision':
     # net = torchvision.models.resnet50(weights='DEFAULT')
     net = torchvision.models.resnet50(weights=None)
     num_features = net.fc.in_features
-    net.fc = nn.Linear(num_features, num_classes)
+    net.fc = nn.Linear(num_features, len(classes))
 
     # net.fc = nn.Sequential(
-    #     nn.Linear(num_features, num_classes),
+    #     nn.Linear(num_features, len(classes)),
     #     nn.Softmax(dim=1)
     # )
 elif args.net=='res50-torchvision-pretrained':
     net = torchvision.models.resnet50(weights='DEFAULT')
     num_features = net.fc.in_features
-    net.fc = nn.Linear(num_features, num_classes)
+    net.fc = nn.Linear(num_features, len(classes))
 
     # net.fc = nn.Sequential(
-    #     nn.Linear(num_features, num_classes),
+    #     nn.Linear(num_features, len(classes)),
     #     nn.Softmax(dim=1)
     # )
 elif args.net=='densenet121':
     net = torchvision.models.densenet121(weights='DEFAULT')
-    net.classifier = nn.Linear(1024, num_classes)
+    net.classifier = nn.Linear(1024, len(classes))
 elif args.net=='efficientnetb0':
     net = torchvision.models.efficientnet_b0(weights='DEFAULT')
     net.classifier = nn.Sequential(
         nn.Dropout(p=0.2, inplace=True), 
-        nn.Linear(in_features=1280, out_features=num_classes, bias=True),
+        nn.Linear(in_features=1280, out_features=len(classes), bias=True),
     )
 elif args.net=='efficientnetb4':
     net = torchvision.models.efficientnet_b4(weights='DEFAULT')
     net.classifier = nn.Sequential(
         nn.Dropout(p=0.4, inplace=True), 
-        nn.Linear(in_features=1792, out_features=num_classes, bias=True),
+        nn.Linear(in_features=1792, out_features=len(classes), bias=True),
         # nn.Softmax(dim=1) 
     )
+elif args.net=='vit_b_16':
+    net = torchvision.models.vit_b_16(weights='DEFAULT')
+    # Replacing the last fully connected layer
+    num_features = net.heads.head.in_features
+    # net.conv_proj = nn.Conv2d(3, 768, kernel_size=(4, 4), stride=(4, 4))
+
+    # net.encoder.layers = nn.Sequential(
+    #     net.encoder.layers[0],  # Keep encoder_layer_0
+    #     net.encoder.layers[1],  # Keep encoder_layer_1
+    #     net.encoder.layers[2],  # Keep encoder_layer_2
+    #     net.encoder.layers[3],  # Keep encoder_layer_3
+    #     # vit_b_16.encoder.layers[4],  # Keep encoder_layer_4
+    #     # vit_b_16.encoder.layers[5],  # Keep encoder_layer_5
+    #     # vit_b_16.encoder.layers[6],  # Keep encoder_layer_6
+    #     # vit_b_16.encoder.layers[7],  # Keep encoder_layer_7
+    # )
+
+    net.heads = nn.Sequential(
+        nn.Linear(num_features, 256),
+        nn.ReLU(),
+        nn.Linear(256, len(classes)),  
+        # nn.Softmax(dim=1)  
+    )
+
+
 elif args.net=='res101':
     net = ResNet101()
 elif args.net=="convmixer":
@@ -243,14 +270,14 @@ elif args.net=="mlpmixer":
         patch_size = args.patch,
         dim = 512,
         depth = 6,
-        num_classes = num_classes
+        num_classes = len(classes)
     )
 elif args.net=="vit_small":
     from models.vit_small import ViT
     net = ViT(
         image_size = size,
         patch_size = args.patch,
-        num_classes = num_classes,
+        num_classes = len(classes),
         dim = int(args.dimhead),
         depth = 6,
         heads = 8,
@@ -263,7 +290,7 @@ elif args.net=="vit_tiny":
     net = ViT(
         image_size = size,
         patch_size = args.patch,
-        num_classes = num_classes,
+        num_classes = len(classes),
         dim = int(args.dimhead),
         depth = 4,
         heads = 6,
@@ -276,7 +303,7 @@ elif args.net=="simplevit":
     net = SimpleViT(
         image_size = size,
         patch_size = args.patch,
-        num_classes = num_classes,
+        num_classes = len(classes),
         dim = int(args.dimhead),
         depth = 6,
         heads = 8,
@@ -286,7 +313,7 @@ elif args.net=="vit":
     net = ViT(
         image_size = size,
         patch_size = args.patch,
-        num_classes = num_classes,
+        num_classes = len(classes),
         dim = int(args.dimhead),
         depth = 6,
         heads = 8,
@@ -303,7 +330,7 @@ elif args.net=="cait":
     net = CaiT(
         image_size = size,
         patch_size = args.patch,
-        num_classes = num_classes,
+        num_classes = len(classes),
         dim = int(args.dimhead),
         depth = 6,   # depth of transformer for patch to patch attention only
         cls_depth=2, # depth of cross attention of CLS tokens to patch
@@ -318,7 +345,7 @@ elif args.net=="cait_small":
     net = CaiT(
         image_size = size,
         patch_size = args.patch,
-        num_classes = num_classes,
+        num_classes = len(classes),
         dim = int(args.dimhead),
         depth = 6,   # depth of transformer for patch to patch attention only
         cls_depth=2, # depth of cross attention of CLS tokens to patch
@@ -331,7 +358,7 @@ elif args.net=="cait_small":
 elif args.net=="swin":
     from models.swin import swin_t
     net = swin_t(window_size=args.patch,
-                num_classes=5,
+                num_classes=len(classes),
                 downscaling_factors=(2,2,2,1))
 
 # For Multi-GPU
@@ -426,7 +453,7 @@ def test(epoch):
         torch.save(state, f'./checkpoint/coffee-diseases-{args.stage}-'+args.net+'-{}-ckpt.t7'.format(args.patch))
     
     os.makedirs("log", exist_ok=True)
-    content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}'
+    content = time.ctime() + ' ' + f'Epoch {epoch}, lr: {optimizer.param_groups[0]["lr"]:.7f}, val loss: {test_loss:.5f}, acc: {(acc):.5f}, best acc: {(best_acc):.5f}'
     print(content)
     with open(f'log/log_{args.net}_patch{args.patch}.txt', 'a') as appender:
         appender.write(content + "\n")
