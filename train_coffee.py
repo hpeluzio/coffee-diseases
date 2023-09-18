@@ -59,12 +59,10 @@ args = parser.parse_args()
 
 # take in args
 usewandb = bool(args.nowandb)
-print('usewandb: ', usewandb)
-
 # sys.exit()
 
 if usewandb:
-    print('Entered!@')
+    print('Using wandb...')
     import wandb
     watermark = "{}_lr{}".format(args.net, args.lr)
     wandb.init(project=f'coffee-diseases-{args.stage}',
