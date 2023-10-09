@@ -48,7 +48,7 @@ parser.add_argument('--net', default='vit')
 parser.add_argument('--bs', default='512')
 parser.add_argument('--batch_size', type=int, default=32)
 parser.add_argument('--num_classes', type=int, default=7)
-parser.add_argument('--size', default="60")
+parser.add_argument('--size', default="224")
 parser.add_argument('--n_epochs', type=int, default=25)
 parser.add_argument('--use_early_stopping', action='store_true', help='Use early stopping')
 parser.add_argument('--patience', type=int, default=5)
@@ -420,7 +420,7 @@ def validation(epoch):
     # Save checkpoint.
     acc = 100.*correct/total
     if acc > best_acc:
-        print(f'Saving... {(acc):.5f}')
+        print(f'Saving... Accuracy; {(acc):.5f}')
         state = {
             "model": net.state_dict(), 
             "optimizer": optimizer.state_dict(),
@@ -486,7 +486,7 @@ for epoch in range(start_epoch, args.n_epochs):
             print(f'Early stopping at epoch {epoch} as validation accuracy has not improved for {early_stopping_patience} epochs.')
             break  # Stop training
 
-print(f'Best accuracy: {best_acc}')
+print(f'Best validation accuracy: {best_acc}')
 
 # writeout wandb
 if usewandb:
