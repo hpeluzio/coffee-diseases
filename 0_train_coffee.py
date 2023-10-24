@@ -74,7 +74,8 @@ if usewandb:
 bs = int(args.bs)
 imsize = int(args.size)
 
-use_amp = bool(~args.noamp)
+use_amp = not bool(args.noamp)
+print('use_amp: ', use_amp)
 aug = args.noaug
 
 n_epochs = args.n_epochs
